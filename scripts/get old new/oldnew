@@ -1,0 +1,93 @@
+#!/usr/bin/env python
+
+#encoding=utf-8
+#add your imports
+import commands
+import sys
+reload(sys)
+sys.setdefaultencoding('utf-8')
+
+# 文件后缀白名单,需要拷贝的文件.
+WHITE_LIST = ['go', 'py']
+
+#get files
+#filter files
+#get current version:  'git rev-parse HEAD'
+#get dirs and mkdir :  'mkdir -p vision-id/new vision-id/old' , 'touch version-id/file-list.txt'
+#cp new files
+#cp old files
+
+def runcmd(cmd):
+    status, out = commands.getstatusoutput(cmd)
+    print cmd
+    return status, out
+
+
+def filter_files(files, white):
+    res = []
+    for f in files: 
+        if '.' not in f:
+            #maybe a dir
+            continue
+        tokens = f.split('.')
+        suffix = tokens[-1]
+        if suffix not in white:
+            continue
+        res.append(f)
+    return res
+
+
+def get_git_status_files():
+    s, out = runcmd('git status -s')
+    if 0 != s:
+        return False, out
+    
+    res = []
+    lines = out.split('\n')
+    for line in lines:
+        res.append(line.split(' ')[-1])
+    return res
+
+##################################################
+# ____    ____       _       _____  ____  _____  #
+#|_   \  /   _|     / \     |_   _||_   \|_   _| #
+#  |   \/   |      / _ \      | |    |   \ | |   #
+#  | |\  /| |     / ___ \     | |    | |\ \| |   #
+# _| |_\/_| |_  _/ /   \ \_  _| |_  _| |_\   |_  #
+#|_____||_____||____| |____||_____||_____|\____| #
+##################################################
+
+#mkdir base
+s, cur_version = runcmd('git rev-parse HEAD')
+runcmd('mkdir %s' % cur_version)
+
+files = get_git_status_files()
+files = filter_files(files, WHITE_LIST)
+
+#mkdir old and new /base/new  /base/old
+base_dir = cur_version
+dir_new = '%s/new' % base_dir
+dir_old = '%s/old' % base_dir
+runcmd('mkdir %s %s -p' % (dir_new, dir_old))
+
+for f in files:
+    #a/b/c.go
+    idx = f.rfind('/')
+    if -1 == idx:
+        f_dir = ''
+    else:
+        f_dir = f[:idx]
+    
+    #make file dir
+    runcmd('mkdir %s/%s -p' % (dir_new, f_dir))
+    runcmd('mkdir %s/%s -p' % (dir_old, f_dir))
+    
+    #cp file to /base/new/f_dir
+    runcmd('cp %s %s/%s' % (f, dir_new, f_dir))
+    
+    #mv file to file.backup, checkout original file and cp to /base/old/f_dir
+    #mv file.backup to file.
+    runcmd('mv %s %s.backup' % (f, f))
+    runcmd('git checkout %s' % f)
+    runcmd('cp %s %s/%s' % (f, dir_old, f_dir))
+    runcmd('mv %s.backup %s' % (f, f))
